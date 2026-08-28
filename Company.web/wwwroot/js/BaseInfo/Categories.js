@@ -44,7 +44,7 @@ function initCategoriesPanel() {
 
     function showError(message) {
         categoryMessage.textContent = "";
-        categoryError.textContent = message || "خطا در ذخیره‌ی دسته‌بندی.";
+        categoryError.textContent = message || "Could not save the category.";
     }
 
     function showMessage(message) {
@@ -115,7 +115,7 @@ function initCategoriesPanel() {
         }
 
         if (id === "" && isDuplicateName(name)) {
-            showError("این دسته‌بندی از قبل وجود دارد.");
+            showError("This category already exists.");
             categoryName.focus();
             return;
         }
@@ -157,12 +157,12 @@ function initCategoriesPanel() {
 
             if (!response.ok) {
                 setLoading(false);
-                showError(payload && payload.message ? payload.message : "خطا در ذخیره‌ی دسته‌بندی.");
+                showError(payload && payload.message ? payload.message : "Could not save the category.");
                 categoryName.focus();
                 return;
             }
 
-            showMessage(payload && payload.message ? payload.message : "ذخیره شد.");
+            showMessage(payload && payload.message ? payload.message : "Category saved.");
 
             // Reload so the new row (and its Edit/Delete buttons) is rendered
             // by the same server-side markup as the rest of the table.
@@ -172,7 +172,7 @@ function initCategoriesPanel() {
 
         } catch (error) {
             setLoading(false);
-            showError("خطای شبکه. لطفاً دوباره تلاش کنید.");
+            showError("Network error. Please try again.");
         }
     }
 

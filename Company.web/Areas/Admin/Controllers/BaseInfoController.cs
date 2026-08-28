@@ -46,7 +46,7 @@ namespace Company.web.Areas.Admin.Controllers
             {
                 return BadRequest(new
                 {
-                    message = "نام دسته‌بندی الزامی است."
+                    message = "Category name is required."
                 });
             }
 
@@ -70,21 +70,21 @@ namespace Company.web.Areas.Admin.Controllers
             {
                 return Conflict(new
                 {
-                    message = $"دسته‌بندی «{title}» از قبل وجود دارد."
+                    message = $"A category named '{title}' already exists."
                 });
             }
             catch (Exception)
             {
                 return StatusCode(500, new
                 {
-                    message = "ذخیره‌ی دسته‌بندی انجام نشد. لطفاً دوباره تلاش کنید."
+                    message = "Could not save the category. Please try again."
                 });
             }
 
             return Json(new
             {
                 ok = true,
-                message = "دسته‌بندی ذخیره شد.",
+                message = "Category saved.",
                 category = new
                 {
                     title
