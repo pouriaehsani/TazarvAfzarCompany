@@ -31,16 +31,16 @@ namespace Company.Application.Validators.Articles
 
             RuleFor(x => x.Image)
             .NotNull()
-            .WithMessage("انتخاب تصویر الزامی است.")
+            .WithMessage("Please select an image.")
             .Must(file => file == null || file.Length > 0)
-            .WithMessage("فایل تصویر خالی است.")
+            .WithMessage("The image file is empty.")
             .Must(file => file == null || file.Length <= 5 * 1024 * 1024)
-            .WithMessage("حجم تصویر نباید بیشتر از 5 مگابایت باشد.")
+            .WithMessage("Image size cannot exceed 5 MB.")
             .Must(file =>
                 file == null ||
                 file.ContentType == "image/jpeg" ||
                 file.ContentType == "image/png")
-            .WithMessage("فرمت تصویر باید JPG یا PNG باشد.");
+            .WithMessage("Image format must be JPG or PNG.");
 
         }
     }
