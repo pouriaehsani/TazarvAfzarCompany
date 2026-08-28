@@ -1,4 +1,4 @@
-﻿using Company.Application.DTOs.Article;
+﻿using Company.Application.DTOs.Category;
 using Company.Domain.Entities;
 using System;
 using System.Collections.Generic;
@@ -14,7 +14,7 @@ namespace Company.Application.Interfaces
 
         Task<Category?> GetByIdAsync(int id);
 
-        Task CreateAsync(Category cat);
+        Task CreateAsync(CreateCategoryDto dto);
 
         Task UpdateAsync(Category cat);
 
