@@ -93,11 +93,19 @@ function initCategoriesPanel() {
     }
 
     /**
-     * POSTs a FormData payload to the given URL with the anti-forgery header
+     * POSTs a FormData payload to the given URL with the anti-forgery token
      * and parses the JSON response. Resolves with the payload; throws with a
      * user-facing message on failure.
+     *
+     * The token is included BOTH as a form field and as the conventional
+     * "RequestVerificationToken" header, so [ValidateAntiForgeryToken] on the
+     * server accepts the request whichever way it is configured to read it.
      */
     async function post(url, body) {
+
+        // Extra form fields are ignored by the [FromForm] model binders, so
+        // adding the token here is harmless and makes the request robust.
+        body.append("__RequestVerificationToken", getToken());
 
         const response = await fetch(url, {
             method: "POST",
