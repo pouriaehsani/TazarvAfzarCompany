@@ -1,8 +1,8 @@
-﻿@{
+@{
     Layout = "_Layout";
 }
 
-@model List<Company.Domain.Entities.Category>
+@model Company.web.Models.BaseInfoViewModel
 
 <div class="row">
 
@@ -61,7 +61,7 @@
 
                         <tbody id="categoryTableBody">
 
-                            @foreach (var cat in Model)
+                            @foreach (var cat in Model.Categories)
                             {
                                 <tr>
 
@@ -129,19 +129,12 @@
                            autocomplete="off"
                            disabled />
 
-                    <span id="categoryError"
-                          class="d-block text-danger small mt-1"></span>
-
-                    <span id="categoryMessage"
-                          class="d-block text-success small mt-1"></span>
-
-
                     <!-- Category Id -->
 
                     <input type="hidden"
                            id="categoryId" />
 
-                    @* Used by Categories.js to send the RequestVerificationToken header *@
+                    @* Used by the scripts to send the RequestVerificationToken *@
                     @Html.AntiForgeryToken()
 
 
@@ -186,11 +179,73 @@
 
             <div class="card-body">
 
-                <h5 class="card-title">
+                <h5 class="card-title mb-0">
                     Tags
                 </h5>
 
-                <!-- Tags content -->
+                <!-- Tag Table -->
+
+                <div class="mt-2"
+                     style="max-height: 250px; overflow-y: auto;">
+
+                    <table class="table table-striped">
+
+                        <thead>
+
+                            <tr>
+
+                                <th scope="col">
+                                    #
+                                </th>
+
+                                <th scope="col">
+                                    Name
+                                </th>
+
+                                <th scope="col" class="text-end">
+                                    Actions
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody id="tagTableBody">
+
+                            @foreach (var tag in Model.Tags)
+                            {
+                                <tr>
+
+                                    <th scope="row">
+                                        @tag.Id
+                                    </th>
+
+                                    <td>
+                                        @tag.Title
+                                    </td>
+
+                                    <td class="text-end">
+
+                                        <button type="button"
+                                                class="btn btn-sm btn-danger btn-delete-tag"
+                                                data-id="@tag.Id">
+
+                                            <i class="bi bi-trash"></i>
+                                            Delete
+
+                                        </button>
+
+                                    </td>
+
+                                </tr>
+                            }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
 
             </div>
 
@@ -205,5 +260,8 @@
 
     @* Antiforgery token is rendered above the Save button, next to #categoryId *@
 
-    <script src="~/js/BaseInfo/Categories.js"></script>
+    @* asp-append-version appends a content-hash to the URL so browsers never
+       serve a stale cached copy of these scripts after a deploy. *@
+    <script src="~/js/BaseInfo/Categories.js" asp-append-version="true"></script>
+    <script src="~/js/BaseInfo/Tags.js" asp-append-version="true"></script>
 }

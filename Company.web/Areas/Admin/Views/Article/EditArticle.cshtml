@@ -1,20 +1,23 @@
 @{
     Layout = "_Layout";
 }
-@model Company.Application.DTOs.Article.CreateArticleDto
+@model Company.Application.DTOs.Article.UpdateArticleDto
 
 <div class="card">
 
     <div class="card-body">
 
-        <h5 class="card-title">Create Article</h5>
+        <h5 class="card-title">Edit Article</h5>
 
         <form asp-area="Admin"
               asp-controller="Article"
-              asp-action="CreateArticle"
+              asp-action="Edit"
               method="post"
               enctype="multipart/form-data"
               id="createArticleForm">
+
+            <!-- Article Id -->
+            <input type="hidden" asp-for="Id" />
 
             <!-- Title -->
             <div class="row mb-3">
@@ -117,6 +120,21 @@
                           class="text-danger">
                     </span>
 
+                    @* Show the current image; leave the file input empty to
+                       keep it unchanged. *@
+                    @if (!string.IsNullOrEmpty(ViewBag.ImagePath as string))
+                    {
+                        <div class="mt-2">
+                            <img src="@ViewBag.ImagePath"
+                                 alt="Current image"
+                                 class="img-thumbnail"
+                                 style="max-height: 120px;" />
+                            <span class="text-muted small ms-2">
+                                Current image (leave empty to keep it)
+                            </span>
+                        </div>
+                    }
+
                 </div>
 
             </div>
@@ -176,7 +194,7 @@
                     <button type="submit"
                             class="btn btn-primary">
 
-                        Create
+                        Update
 
                     </button>
 
@@ -198,12 +216,17 @@
 
     </div>
 </div>
-    
+
 @section Scripts
 {
     <script>
         window.articleContentImageUploadUrl =
             '@Url.Action("UploadContentImage", "Article", new { area = "Admin" })';
+
+        @* Pre-populate the tagify control with the article's existing tags. *@
+        window.articleInitialTags =
+            @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+                Model.TagNames ?? new System.Collections.Generic.List<string>()));
     </script>
     <script src="~/js/article/tinymcecontent.js"></script>
     <script src="~/js/article/tags.js"></script>

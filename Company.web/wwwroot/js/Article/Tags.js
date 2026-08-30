@@ -1,38 +1,55 @@
-const input = document.getElementById('tagInput');
+/**
+ * Tags helper for the article create/edit form.
+ *
+ * Initialises the Tagify control on #tagInput. On form submit it copies the
+ * current tags into hidden TagNames fields so they are bound to the DTO.
+ *
+ * On the edit screen the page sets window.articleInitialTags (an array of tag
+ * names) and this script pre-loads them into the control. On create the
+ * variable is undefined, so the control starts empty.
+ */
+(function () {
+    "use strict";
 
-const tagify = new Tagify(input);
+    document.addEventListener("DOMContentLoaded", function () {
 
-const form = document.getElementById('createArticleForm');
+        var input = document.getElementById("tagInput");
 
-const tagValues = document.getElementById('tagValues');
+        if (!input) {
+            return;
+        }
 
+        var tagify = new Tagify(input);
 
-form.addEventListener('submit', function (event) {
+        var form = document.getElementById("createArticleForm");
+        var tagValues = document.getElementById("tagValues");
 
-    tagValues.innerHTML = '';
+        // Pre-populate existing tags on the edit screen.
+        if (window.articleInitialTags && window.articleInitialTags.length) {
+            tagify.addTags(window.articleInitialTags);
+        }
 
-    tagify.value.forEach(function (tag) {
+        if (form) {
+            form.addEventListener("submit", function () {
 
-        const hiddenInput = document.createElement('input');
+                if (tagValues) {
+                    tagValues.innerHTML = "";
+                }
 
-        hiddenInput.type = 'hidden';
-        hiddenInput.name = 'TagNames';
-        hiddenInput.value = tag.value;
+                tagify.value.forEach(function (tag) {
 
-        tagValues.appendChild(hiddenInput);
+                    var hiddenInput = document.createElement("input");
+                    hiddenInput.type = "hidden";
+                    hiddenInput.name = "TagNames";
+                    hiddenInput.value = tag.value;
+
+                    if (tagValues) {
+                        tagValues.appendChild(hiddenInput);
+                    }
+                });
+
+            });
+        }
+
     });
-
-
-    console.log("Tagify:", tagify.value);
-
-    console.log(
-        "Hidden:",
-        document.querySelectorAll('input[name="TagNames"]')
-    );
-
-    console.log(
-        "Form:",
-        new FormData(form).getAll('TagNames')
-    );
-
-});
+})();

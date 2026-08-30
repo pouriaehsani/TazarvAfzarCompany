@@ -1,4 +1,4 @@
-﻿using Company.Application.DTOs.Article;
+using Company.Application.DTOs.Article;
 using Company.Domain.Entities;
 using Microsoft.AspNetCore.Http;
 using System;
@@ -14,6 +14,9 @@ namespace Company.Application.Interfaces
         Task<List<Article>> GetAllAsync();
 
         Task<Article?> GetByIdAsync(int id);
+
+        /// <summary>Loads an article together with its tags, for editing.</summary>
+        Task<Article?> GetByIdWithTagsAsync(int id);
 
         Task CreateAsync(CreateArticleDto CreateDto);
 
