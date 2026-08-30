@@ -6,45 +6,58 @@ using FluentValidation;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Company.Application.Services
 {
+    /// <summary>
+    /// Application-layer service that owns all business rules for managing
+    /// categories.
+    ///
+    /// The controller delegates every operation here, so it holds zero
+    /// business logic — this service is the single place where validation,
+    /// uniqueness, and referential-integrity rules are enforced before data
+    /// is persisted.
+    /// </summary>
     public class BaseInfo : IBaseInfo
     {
-        private readonly IGenericRepository<Category> _cat;
+        private readonly IGenericRepository<Category> _categoryRepository;
+        private readonly IGenericRepository<Article> _articleRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IValidator<CreateCategoryDto> _createCategoryValidator;
+        private readonly IValidator<UpdateCategoryDto> _updateCategoryValidator;
 
         public BaseInfo(
-            IGenericRepository<Category> genericRepository,
+            IGenericRepository<Category> categoryRepository,
+            IGenericRepository<Article> articleRepository,
             IUnitOfWork unitOfWork,
-            IValidator<CreateCategoryDto> createCategoryValidator)
+            IValidator<CreateCategoryDto> createCategoryValidator,
+            IValidator<UpdateCategoryDto> updateCategoryValidator)
         {
-            _cat = genericRepository;
+            _categoryRepository = categoryRepository;
+            _articleRepository = articleRepository;
             _unitOfWork = unitOfWork;
             _createCategoryValidator = createCategoryValidator;
+            _updateCategoryValidator = updateCategoryValidator;
         }
 
         public async Task<List<Category>> GetAllAsync()
         {
-            return await _cat.GetAllAsync();
+            return await _categoryRepository.GetAllAsync();
+        }
+
+        public async Task<Category?> GetByIdAsync(int id)
+        {
+            return await _categoryRepository.GetByIdAsync(id);
         }
 
         public async Task CreateAsync(CreateCategoryDto dto)
         {
             var title = NormalizeTitle(dto.Title);
 
-            // Application-layer business rules: validate the normalized input.
-            var validationResult = await _createCategoryValidator.ValidateAsync(
-                new CreateCategoryDto { Title = title });
-
-            if (!validationResult.IsValid)
-            {
-                throw new Company.Application.Exceptions.ValidationException(
-                    validationResult.Errors);
-            }
+            // Application-layer business rules: validate the normalized input
+            // before it is allowed to reach the data store.
+            await EnsureCreateValidAsync(title);
 
             if (await TitleExistsAsync(title))
             {
@@ -58,7 +71,62 @@ namespace Company.Application.Services
                 CreateDate = DateTime.UtcNow
             };
 
-            await _cat.AddAsync(category);
+            await _categoryRepository.AddAsync(category);
+            await _unitOfWork.SaveChangedAsync();
+        }
+
+        public async Task UpdateAsync(UpdateCategoryDto dto)
+        {
+            var title = NormalizeTitle(dto.Title);
+
+            // Validate the normalized input with the update rules, so the same
+            // data-quality requirements apply as on create.
+            await EnsureUpdateValidAsync(dto.Id, title);
+
+            // A rename must still respect uniqueness, but it has to ignore the
+            // category being edited itself (renaming X to "X" is always legal).
+            if (await TitleExistsExcludingAsync(title, dto.Id))
+            {
+                throw new DuplicateCategoryNameException(title);
+            }
+
+            // Load the real aggregate from the store; the request only carries
+            // the fields the user may change.
+            var category = await _categoryRepository.GetByIdAsync(dto.Id);
+            if (category is null)
+            {
+                throw new CategoryNotFoundException(dto.Id);
+            }
+
+            category.Title = title;
+            category.UpdateDate = DateTime.UtcNow;
+
+            _categoryRepository.Update(category);
+            await _unitOfWork.SaveChangedAsync();
+        }
+
+        public async Task DeleteAsync(int id)
+        {
+            var category = await _categoryRepository.GetByIdAsync(id);
+            if (category is null)
+            {
+                throw new CategoryNotFoundException(id);
+            }
+
+            // Referential-integrity rule: because the store cascades deletes
+            // from Category to Article, we refuse to delete a category that is
+            // still referenced — otherwise all its articles would disappear
+            // silently. This turns an implicit data-loss trap into an explicit,
+            // communicated business rule.
+            var hasArticles = await _articleRepository.AnyAsync(
+                article => article.CategoryId == id);
+
+            if (hasArticles)
+            {
+                throw new CategoryHasArticlesException(id, category.Title);
+            }
+
+            _categoryRepository.Delete(category);
             await _unitOfWork.SaveChangedAsync();
         }
 
@@ -66,7 +134,7 @@ namespace Company.Application.Services
         {
             var normalizedTitle = NormalizeTitle(title);
 
-            var categories = await _cat.GetAllAsync();
+            var categories = await _categoryRepository.GetAllAsync();
 
             return categories.Any(x =>
                 string.Equals(
@@ -75,22 +143,62 @@ namespace Company.Application.Services
                     StringComparison.OrdinalIgnoreCase));
         }
 
-        public Task DeleteAsync(int id)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<Category?> GetByIdAsync(int id)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task UpdateAsync(Category cat)
-        {
-            throw new NotImplementedException();
-        }
-
         #region Private Methods
+
+        /// <summary>
+        /// Validates a title for the create operation and raises a
+        /// <see cref="ValidationException"/> when it is unacceptable.
+        /// </summary>
+        private async Task EnsureCreateValidAsync(string title)
+        {
+            var validationResult = await _createCategoryValidator.ValidateAsync(
+                new CreateCategoryDto { Title = title });
+
+            ThrowIfInvalid(validationResult);
+        }
+
+        /// <summary>
+        /// Validates an id/title pair for the update operation and raises a
+        /// <see cref="ValidationException"/> when it is unacceptable.
+        /// </summary>
+        private async Task EnsureUpdateValidAsync(int id, string title)
+        {
+            var validationResult = await _updateCategoryValidator.ValidateAsync(
+                new UpdateCategoryDto { Id = id, Title = title });
+
+            ThrowIfInvalid(validationResult);
+        }
+
+        /// <summary>
+        /// Shared helper that turns a failed validation into the application's
+        /// canonical <see cref="ValidationException"/>.
+        /// </summary>
+        private static void ThrowIfInvalid(
+            FluentValidation.Results.ValidationResult validationResult)
+        {
+            if (!validationResult.IsValid)
+            {
+                throw new ValidationException(validationResult.Errors);
+            }
+        }
+
+        /// <summary>
+        /// Returns whether any category other than the one being edited already
+        /// uses the given (normalized) title.
+        /// </summary>
+        private async Task<bool> TitleExistsExcludingAsync(string title, int excludingId)
+        {
+            var normalizedTitle = NormalizeTitle(title);
+
+            var categories = await _categoryRepository.GetAllAsync();
+
+            return categories.Any(x =>
+                x.Id != excludingId &&
+                string.Equals(
+                    NormalizeTitle(x.Title),
+                    normalizedTitle,
+                    StringComparison.OrdinalIgnoreCase));
+        }
 
         private static string NormalizeTitle(string? title)
         {
