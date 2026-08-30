@@ -26,7 +26,6 @@ builder.Services.AddScoped<IUnitOfWork,UnitOfWork>();
 builder.Services.AddScoped<IArticleService, ArticleService>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddValidatorsFromAssemblyContaining<CreateArticleValidator>();
-builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<IBaseInfo, BaseInfo>();
 builder.Services.AddAutoMapper(cfg =>
 {

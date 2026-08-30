@@ -1,9 +1,7 @@
-﻿using Company.Application.DTOs.Article;
-using Company.Application.Extensions;
+using Company.Application.DTOs.Article;
+using Company.Application.Exceptions;
 using Company.Application.Interfaces;
-using Company.Application.Validators.Articles;
-using Company.Domain.Entities;
-using FluentValidation;
+using Company.web.Extensions;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,12 +11,10 @@ namespace Company.web.Areas.Admin.Controllers;
 public class ArticleController : Controller
 {
     private readonly IArticleService _articleService;
-    private readonly IValidator<CreateArticleDto> _validator;
 
-    public ArticleController(IArticleService articleService,IValidator<CreateArticleDto> validator)
+    public ArticleController(IArticleService articleService)
     {
         _articleService = articleService;
-        _validator = validator;
     }
 
     [HttpGet]
@@ -26,20 +22,24 @@ public class ArticleController : Controller
     {
         return View();
     }
+
     [HttpPost]
     public async Task<IActionResult> CreateArticle(CreateArticleDto dto)
     {
-        var result = await _validator.ValidateAsync(dto);
-
-        if (!result.IsValid)
+        // Validation is enforced inside IArticleService (application layer);
+        // this action only surfaces the validation failures to the view.
+        try
         {
-            result.AddToModelState(ModelState);
+            await _articleService.CreateAsync(dto);
+        }
+        catch (ValidationException ex)
+        {
+            new ValidationResult(ex.Errors).AddToModelState(ModelState);
 
             return View(dto);
         }
-        await _articleService.CreateAsync(dto);
 
-        return RedirectToAction(nameof(ArticleList));       
+        return RedirectToAction(nameof(ArticleList));
     }
 
 
