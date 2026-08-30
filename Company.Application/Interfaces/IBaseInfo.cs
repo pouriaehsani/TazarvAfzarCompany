@@ -1,13 +1,18 @@
-﻿using Company.Application.DTOs.Category;
+using Company.Application.DTOs.Category;
 using Company.Domain.Entities;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Company.Application.Interfaces
 {
+    /// <summary>
+    /// Application-layer contract for managing base information such as
+    /// categories.
+    ///
+    /// The interface intentionally exposes DTOs (not domain entities) for
+    /// write operations so that the web layer never has to reason about
+    /// persistence shapes, honouring the dependency rule of Clean
+    /// Architecture.
+    /// </summary>
     public interface IBaseInfo
     {
         Task<List<Category>> GetAllAsync();
@@ -16,7 +21,7 @@ namespace Company.Application.Interfaces
 
         Task CreateAsync(CreateCategoryDto dto);
 
-        Task UpdateAsync(Category cat);
+        Task UpdateAsync(UpdateCategoryDto dto);
 
         Task DeleteAsync(int id);
     }
