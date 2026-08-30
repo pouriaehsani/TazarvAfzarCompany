@@ -3,7 +3,8 @@
  *
  * Renders no tags by itself — the list is server-rendered. This script only
  * wires up the per-row delete action: it confirms with the user, POSTs to the
- * delete endpoint, and removes the row from the DOM on success.
+ * delete endpoint, removes the row from the DOM, and reports the outcome via
+ * the shared NiceAdmin toast component (window.showToast).
  *
  * The server owns all business rules (existence, referential integrity).
  * The anti-forgery token is sent both as a form field and as the conventional
@@ -21,9 +22,6 @@
         if (!tableBody) {
             return;
         }
-
-        var errorEl = document.getElementById("tagError");
-        var messageEl = document.getElementById("tagMessage");
 
         /**
          * Reads the anti-forgery token rendered by @Html.AntiForgeryToken().
@@ -87,30 +85,29 @@
                 return;
             }
 
-            if (messageEl) messageEl.textContent = "";
-            if (errorEl) errorEl.textContent = "";
-
             postDelete(id)
                 .then(function (payload) {
-                    if (messageEl) {
-                        messageEl.textContent =
-                            (payload && payload.message)
-                                ? payload.message
-                                : "Tag deleted.";
-                    }
+                    // Deleting removes the row in place (no reload), so the
+                    // success toast can be shown immediately.
+                    window.showToast(
+                        "success",
+                        "Tag deleted.",
+                        (payload && payload.message) ? payload.message : ""
+                    );
 
-                    // Remove the row immediately so the list reflects the
-                    // change without a full page reload.
+                    // Remove the row so the list reflects the change without a
+                    // full page reload.
                     var row = button.closest("tr");
                     if (row) {
                         row.remove();
                     }
                 })
                 .catch(function (error) {
-                    if (errorEl) {
-                        errorEl.textContent =
-                            error.message || "Could not delete the tag.";
-                    }
+                    window.showToast(
+                        "error",
+                        "Could not delete the tag.",
+                        error.message
+                    );
                 });
 
         });

@@ -37,8 +37,6 @@
             cancelCategory: document.getElementById("btnCancelCategory"),
             name: document.getElementById("categoryName"),
             id: document.getElementById("categoryId"),
-            error: document.getElementById("categoryError"),
-            message: document.getElementById("categoryMessage"),
             saveIcon: document.getElementById("saveCategoryIcon"),
             saveText: document.getElementById("saveCategoryText"),
             tableBody: document.getElementById("categoryTableBody")
@@ -64,14 +62,15 @@
             return tokenInput ? tokenInput.value : "";
         }
 
-        function showError(message) {
-            els.message.textContent = "";
-            els.error.textContent = message || "Could not save the category.";
+        // Success/error feedback is surfaced through the shared NiceAdmin
+        // toast component (window.showToast) instead of inline page spans.
+
+        function showSuccess(title, message) {
+            window.showToast("success", title, message);
         }
 
-        function showMessage(message) {
-            els.error.textContent = "";
-            els.message.textContent = message || "";
+        function showFailure(title, message) {
+            window.showToast("error", title, message || "Could not save the category.");
         }
 
         function setBusy(busy) {
@@ -102,8 +101,6 @@
             els.name.readOnly = false;
             els.saveCategory.disabled = true;
             els.cancelCategory.disabled = true;
-            showError("");
-            showMessage("");
         }
 
         /* ------------------------------------------------------------------
@@ -148,6 +145,8 @@
         /**
          * After a successful save/delete we reload the page so the table is
          * re-rendered from the server with the same markup as first load.
+         * The success toast is stashed so it survives the reload and is shown
+         * on the freshly loaded page.
          */
         function reloadList() {
             setTimeout(function () {
@@ -165,7 +164,7 @@
             var name = els.name.value.trim();
 
             if (name === "") {
-                showError("Please enter category name.");
+                showFailure("Category", "Please enter category name.");
                 els.name.focus();
                 return;
             }
@@ -175,8 +174,6 @@
             }
 
             setBusy(true);
-            showError("");
-            showMessage("");
 
             var body = new FormData();
             body.append("Title", name);
@@ -190,14 +187,19 @@
             post(isEdit ? endpoints.update : endpoints.create, body)
                 .then(function (payload) {
                     setBusy(false);
-                    showMessage(
-                        (payload && payload.message) ? payload.message : "Category saved."
+
+                    // Stash the toast so it is shown after the page reload.
+                    window.showToastOnNextPage(
+                        "success",
+                        isEdit ? "Category updated." : "Category created.",
+                        (payload && payload.message) ? payload.message : ""
                     );
+
                     reloadList();
                 })
                 .catch(function (error) {
                     setBusy(false);
-                    showError(error.message || "Network error. Please try again.");
+                    showFailure("Could not save the category.", error.message);
                 });
         }
 
@@ -214,18 +216,17 @@
                 return;
             }
 
-            showError("");
-            showMessage("");
-
             post(endpoints.deleteById(id), new FormData())
                 .then(function (payload) {
-                    showMessage(
-                        (payload && payload.message) ? payload.message : "Category deleted."
+                    window.showToastOnNextPage(
+                        "success",
+                        "Category deleted.",
+                        (payload && payload.message) ? payload.message : ""
                     );
                     reloadList();
                 })
                 .catch(function (error) {
-                    showError(error.message || "Could not delete the category.");
+                    showFailure("Could not delete the category.", error.message);
                 });
         }
 
@@ -236,8 +237,6 @@
         els.newCategory.addEventListener("click", function () {
             els.id.value = "";
             els.name.value = "";
-            showError("");
-            showMessage("");
             enableForm();
         });
 

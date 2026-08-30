@@ -39,6 +39,12 @@ public class ArticleController : Controller
             return View(dto);
         }
 
+        // The ArticleList page surfaces a success toast via TempData
+        // (rendered in the layout and shown by toast.js after the redirect).
+        TempData["ToastType"] = "success";
+        TempData["ToastTitle"] = "Article created.";
+        TempData["ToastMessage"] = "Your article was saved successfully.";
+
         return RedirectToAction(nameof(ArticleList));
     }
 

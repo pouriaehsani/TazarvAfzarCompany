@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -284,6 +284,18 @@
     <main id="main" class="main">
         @RenderBody()
     </main>
+
+    @* Server-driven toast (PRG pattern): a controller that redirects after a
+       POST can set TempData["ToastType"] / ["ToastTitle"] / ["ToastMessage"]
+       and this hidden element is rendered for toast.js to pick up on load. *@
+    @if (TempData["ToastType"] != null)
+    {
+        <div class="d-none"
+             data-toast
+             data-toast-type="@TempData["ToastType"]"
+             data-toast-title="@TempData["ToastTitle"]"
+             data-toast-message="@TempData["ToastMessage"]"></div>
+    }
     <!-- ======= Footer ======= -->
     <footer id="footer" class="footer">
         <div class="copyright">
@@ -315,6 +327,7 @@
     <!-- Template Main JS File -->
     
     <script src="~/js/main.js"></script>
+    <script src="~/js/toast.js"></script>
 
     @await RenderSectionAsync("Scripts", required: false)
 
