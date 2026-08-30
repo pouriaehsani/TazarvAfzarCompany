@@ -1,6 +1,7 @@
 using Company.Application.DTOs.Category;
 using Company.Application.Exceptions;
 using Company.Application.Interfaces;
+using Company.web.Models;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Linq;
@@ -9,7 +10,8 @@ using System.Threading.Tasks;
 namespace Company.web.Areas.Admin.Controllers
 {
     /// <summary>
-    /// Handles HTTP requests for base information management (categories).
+    /// Handles HTTP requests for base information management (categories and
+    /// tags).
     ///
     /// This controller contains no business logic. Every operation is
     /// delegated to <see cref="IBaseInfo"/> and the outcomes are mapped to the
@@ -28,8 +30,13 @@ namespace Company.web.Areas.Admin.Controllers
         [HttpGet]
         public async Task<IActionResult> BaseInfo()
         {
-            var baseInfo = await _baseInfoService.GetAllAsync();
-            return View(baseInfo);
+            var model = new BaseInfoViewModel
+            {
+                Categories = await _baseInfoService.GetAllAsync(),
+                Tags = await _baseInfoService.GetAllTagsAsync()
+            };
+
+            return View(model);
         }
 
         /// <summary>
@@ -138,6 +145,38 @@ namespace Company.web.Areas.Admin.Controllers
         }
 
         /// <summary>
+        /// Deletes a tag. Deleting a tag only removes its links from articles
+        /// (a pure junction table), so no articles are ever affected.
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteTag(int id)
+        {
+            try
+            {
+                await _baseInfoService.DeleteTagAsync(id);
+            }
+            catch (Exception ex) when (TryTranslate(ex, out var error))
+            {
+                return error;
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new
+                {
+                    message = "Could not delete the tag. Please try again."
+                });
+            }
+
+            return Json(new
+            {
+                ok = true,
+                message = "Tag deleted.",
+                id
+            });
+        }
+
+        /// <summary>
         /// Maps application-layer exceptions to their canonical HTTP responses.
         /// Returns <c>true</c> when the exception was a known business-rule
         /// failure (so the caller can short-circuit the generic 500 path).
@@ -165,6 +204,10 @@ namespace Company.web.Areas.Admin.Controllers
 
                 case CategoryHasArticlesException e:
                     error = Conflict(new { message = e.Message });
+                    return true;
+
+                case TagNotFoundException e:
+                    error = NotFound(new { message = e.Message });
                     return true;
 
                 default:

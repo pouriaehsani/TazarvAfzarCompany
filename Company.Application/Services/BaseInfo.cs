@@ -29,6 +29,7 @@ namespace Company.Application.Services
     {
         private readonly IGenericRepository<Category> _categoryRepository;
         private readonly IGenericRepository<Article> _articleRepository;
+        private readonly IGenericRepository<Tag> _tagRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IValidator<CreateCategoryDto> _createCategoryValidator;
         private readonly IValidator<UpdateCategoryDto> _updateCategoryValidator;
@@ -36,12 +37,14 @@ namespace Company.Application.Services
         public BaseInfo(
             IGenericRepository<Category> categoryRepository,
             IGenericRepository<Article> articleRepository,
+            IGenericRepository<Tag> tagRepository,
             IUnitOfWork unitOfWork,
             IValidator<CreateCategoryDto> createCategoryValidator,
             IValidator<UpdateCategoryDto> updateCategoryValidator)
         {
             _categoryRepository = categoryRepository;
             _articleRepository = articleRepository;
+            _tagRepository = tagRepository;
             _unitOfWork = unitOfWork;
             _createCategoryValidator = createCategoryValidator;
             _updateCategoryValidator = updateCategoryValidator;
@@ -133,6 +136,27 @@ namespace Company.Application.Services
             }
 
             _categoryRepository.Delete(category);
+            await _unitOfWork.SaveChangedAsync();
+        }
+
+        public async Task<List<Tag>> GetAllTagsAsync()
+        {
+            return await _tagRepository.GetAllAsync();
+        }
+
+        public async Task DeleteTagAsync(int id)
+        {
+            var tag = await _tagRepository.GetByIdAsync(id);
+            if (tag is null)
+            {
+                throw new TagNotFoundException(id);
+            }
+
+            // Note on referential integrity: the Tag -> ArticleTag relationship
+            // cascades, but ArticleTag is a pure junction table. Deleting a tag
+            // therefore only removes the tag's link rows — the articles that
+            // used the tag are never deleted, so no data-loss guard is needed.
+            _tagRepository.Delete(tag);
             await _unitOfWork.SaveChangedAsync();
         }
 
