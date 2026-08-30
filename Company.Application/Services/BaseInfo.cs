@@ -8,6 +8,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+// Both FluentValidation and this project define a type named ValidationException,
+// so a bare reference would be ambiguous and fail to compile. The alias removes
+// the ambiguity for good and keeps the app's exception flowing to the
+// controller's TryTranslate handler (which only understands the app type).
+using AppValidationException = Company.Application.Exceptions.ValidationException;
+
 namespace Company.Application.Services
 {
     /// <summary>
@@ -147,7 +153,7 @@ namespace Company.Application.Services
 
         /// <summary>
         /// Validates a title for the create operation and raises a
-        /// <see cref="ValidationException"/> when it is unacceptable.
+        /// <see cref="AppValidationException"/> when it is unacceptable.
         /// </summary>
         private async Task EnsureCreateValidAsync(string title)
         {
@@ -159,7 +165,7 @@ namespace Company.Application.Services
 
         /// <summary>
         /// Validates an id/title pair for the update operation and raises a
-        /// <see cref="ValidationException"/> when it is unacceptable.
+        /// <see cref="AppValidationException"/> when it is unacceptable.
         /// </summary>
         private async Task EnsureUpdateValidAsync(int id, string title)
         {
@@ -171,14 +177,14 @@ namespace Company.Application.Services
 
         /// <summary>
         /// Shared helper that turns a failed validation into the application's
-        /// canonical <see cref="ValidationException"/>.
+        /// canonical <see cref="AppValidationException"/>.
         /// </summary>
         private static void ThrowIfInvalid(
             FluentValidation.Results.ValidationResult validationResult)
         {
             if (!validationResult.IsValid)
             {
-                throw new FluentValidation.ValidationException(validationResult.Errors);
+                throw new AppValidationException(validationResult.Errors);
             }
         }
 

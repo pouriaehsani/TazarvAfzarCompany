@@ -1,323 +1,275 @@
 /**
  * BaseInfo > Categories panel.
  *
- * Drives the category management UI:
- *  - "New Category" enables the name field and stores a new category.
- *  - "Edit" loads an existing category into the form and renames it.
- *  - "Delete" removes a category (the server refuses in-use categories).
+ * Handles every category action on this page:
+ *   - "New Category"  -> clears the form and lets the user create a category.
+ *   - "Edit"          -> loads a category into the form for renaming.
+ *   - "Save"          -> creates (no id) or updates (with id) the category.
+ *   - "Delete"        -> deletes a category after confirmation.
  *
- * All requests carry the anti-forgery token as a header, matching the
- * [ValidateAntiForgeryToken] attribute on the server actions.
+ * The server owns all business rules (validation, uniqueness, referential
+ * integrity). This script only talks to the JSON endpoints and reloads the
+ * list from the server after a successful change.
+ *
+ * Note on the anti-forgery token: it is sent BOTH as a form field
+ * (__RequestVerificationToken) and as the conventional RequestVerificationToken
+ * header, so [ValidateAntiForgeryToken] always accepts the request.
  */
-document.addEventListener("DOMContentLoaded", initCategoriesPanel);
+(function () {
+    "use strict";
 
-function initCategoriesPanel() {
+    document.addEventListener("DOMContentLoaded", initCategoriesPanel);
 
-    const urls = {
-        create: "/Admin/BaseInfo/Create",
-        update: "/Admin/BaseInfo/Update",
-        baseInfo: "/Admin/BaseInfo/BaseInfo",
-        delete: function (id) { return "/Admin/BaseInfo/Delete/" + id; }
-    };
+    function initCategoriesPanel() {
 
-    const btnNewCategory = document.getElementById("btnNewCategory");
-    const btnSaveCategory = document.getElementById("btnSaveCategory");
-    const btnCancelCategory = document.getElementById("btnCancelCategory");
-    const categoryName = document.getElementById("categoryName");
-    const categoryId = document.getElementById("categoryId");
-    const categoryError = document.getElementById("categoryError");
-    const categoryMessage = document.getElementById("categoryMessage");
-    const saveCategoryIcon = document.getElementById("saveCategoryIcon");
-    const saveCategoryText = document.getElementById("saveCategoryText");
-    const tableBody = document.getElementById("categoryTableBody");
+        var endpoints = {
+            create: "/Admin/BaseInfo/Create",
+            update: "/Admin/BaseInfo/Update",
+            baseInfo: "/Admin/BaseInfo/BaseInfo",
+            deleteById: function (id) {
+                return "/Admin/BaseInfo/Delete/" + id;
+            }
+        };
 
-    if (!btnNewCategory || !btnSaveCategory || !categoryName) {
-        return;
-    }
+        var els = {
+            newCategory: document.getElementById("btnNewCategory"),
+            saveCategory: document.getElementById("btnSaveCategory"),
+            cancelCategory: document.getElementById("btnCancelCategory"),
+            name: document.getElementById("categoryName"),
+            id: document.getElementById("categoryId"),
+            error: document.getElementById("categoryError"),
+            message: document.getElementById("categoryMessage"),
+            saveIcon: document.getElementById("saveCategoryIcon"),
+            saveText: document.getElementById("saveCategoryText"),
+            tableBody: document.getElementById("categoryTableBody")
+        };
 
-    let isSaving = false;
-
-    // ============================
-    // Helpers
-    // ============================
-
-    /**
-     * Reads the anti-forgery token rendered by @Html.AntiForgeryToken().
-     */
-    function getToken() {
-        const tokenInput = document.querySelector(
-            "input[name='__RequestVerificationToken']"
-        );
-
-        return tokenInput ? tokenInput.value : "";
-    }
-
-    function showError(message) {
-        categoryMessage.textContent = "";
-        categoryError.textContent = message || "Could not save the category.";
-    }
-
-    function showMessage(message) {
-        categoryError.textContent = "";
-        categoryMessage.textContent = message || "";
-    }
-
-    /**
-     * Toggles the form's busy state so the user cannot fire duplicate
-     * requests or edit the name while a request is in flight.
-     */
-    function setLoading(loading) {
-        isSaving = loading;
-
-        btnSaveCategory.disabled = loading;
-        btnCancelCategory.disabled = loading;
-        categoryName.readOnly = loading;
-
-        saveCategoryIcon.className = loading ? "bi bi-arrow-clockwise" : "bi bi-check-lg";
-        saveCategoryText.textContent = loading ? "Saving..." : "Save";
-    }
-
-    /**
-     * Checks the currently rendered table for a category with the same name.
-     * Used only as a fast client-side guard on create; the server always
-     * re-validates uniqueness authoritatively.
-     */
-    function isDuplicateName(name) {
-        const rows = tableBody ? tableBody.querySelectorAll("tr") : [];
-
-        return Array.prototype.some.call(rows, function (row) {
-            const cell = row.children[1];
-
-            return cell && cell.textContent.trim().toLowerCase() === name.toLowerCase();
-        });
-    }
-
-    /**
-     * POSTs a FormData payload to the given URL with the anti-forgery token
-     * and parses the JSON response. Resolves with the payload; throws with a
-     * user-facing message on failure.
-     *
-     * The token is included BOTH as a form field and as the conventional
-     * "RequestVerificationToken" header, so [ValidateAntiForgeryToken] on the
-     * server accepts the request whichever way it is configured to read it.
-     */
-    async function post(url, body) {
-
-        // Extra form fields are ignored by the [FromForm] model binders, so
-        // adding the token here is harmless and makes the request robust.
-        body.append("__RequestVerificationToken", getToken());
-
-        const response = await fetch(url, {
-            method: "POST",
-            headers: {
-                "RequestVerificationToken": getToken()
-            },
-            body: body
-        });
-
-        let payload = null;
-
-        try {
-            payload = await response.json();
-        } catch (e) {
-            payload = null;
+        // If any required element is missing, attach nothing so we fail quietly
+        // instead of throwing errors that break the whole page.
+        if (!els.newCategory || !els.saveCategory || !els.name) {
+            return;
         }
 
-        if (!response.ok) {
-            throw new Error(
-                (payload && payload.message) ? payload.message : "Request failed."
+        var isBusy = false;
+
+        /* ------------------------------------------------------------------
+         * Small UI helpers
+         * ------------------------------------------------------------------ */
+
+        function readToken() {
+            var tokenInput = document.querySelector(
+                "input[name='__RequestVerificationToken']"
             );
+
+            return tokenInput ? tokenInput.value : "";
         }
 
-        return payload;
-    }
-
-    // ============================
-    // Form state
-    // ============================
-
-    /**
-     * Enables the form for either creating or editing a category.
-     */
-    function enableForm() {
-        categoryName.disabled = false;
-        btnSaveCategory.disabled = false;
-        btnCancelCategory.disabled = false;
-
-        categoryName.focus();
-    }
-
-    /**
-     * Clears the form back to its idle, disabled state.
-     */
-    function resetCategoryForm() {
-        categoryId.value = "";
-        categoryName.value = "";
-
-        categoryName.disabled = true;
-        categoryName.readOnly = false;
-
-        btnSaveCategory.disabled = true;
-        btnCancelCategory.disabled = true;
-
-        showError("");
-        showMessage("");
-    }
-
-    // ============================
-    // Create / Update
-    // ============================
-
-    /**
-     * Saves the category. When no id is loaded it creates a new category;
-     * when an id is loaded it updates (renames) that category.
-     */
-    async function saveCategory() {
-
-        const id = categoryId.value;
-        const name = categoryName.value.trim();
-
-        if (name === "") {
-            showError("Please enter category name.");
-            categoryName.focus();
-            return;
+        function showError(message) {
+            els.message.textContent = "";
+            els.error.textContent = message || "Could not save the category.";
         }
 
-        // Client-side duplicate guard only applies to creating, where no id
-        // has been chosen yet. The server re-validates either way.
-        if (id === "" && isDuplicateName(name)) {
-            showError("This category already exists.");
-            categoryName.focus();
-            return;
+        function showMessage(message) {
+            els.error.textContent = "";
+            els.message.textContent = message || "";
         }
 
-        if (isSaving) {
-            return;
+        function setBusy(busy) {
+            isBusy = busy;
+
+            els.saveCategory.disabled = busy;
+            els.cancelCategory.disabled = busy;
+            els.name.readOnly = busy;
+
+            els.saveIcon.className = busy
+                ? "bi bi-arrow-clockwise"
+                : "bi bi-check-lg";
+
+            els.saveText.textContent = busy ? "Saving..." : "Save";
         }
 
-        setLoading(true);
-        showError("");
-        showMessage("");
-
-        const body = new FormData();
-        body.append("Title", name);
-
-        const isEdit = id !== "";
-
-        if (isEdit) {
-            body.append("Id", id);
+        function enableForm() {
+            els.name.disabled = false;
+            els.saveCategory.disabled = false;
+            els.cancelCategory.disabled = false;
+            els.name.focus();
         }
 
-        try {
-
-            const payload = isEdit
-                ? await post(urls.update, body)
-                : await post(urls.create, body);
-
-            setLoading(false);
-            showMessage(payload && payload.message ? payload.message : "Category saved.");
-
-            // Reload so the table reflects the change with the same
-            // server-rendered markup used for the initial page load.
-            setTimeout(function () {
-                window.location.assign(urls.baseInfo);
-            }, 700);
-
-        } catch (error) {
-            setLoading(false);
-            showError(error.message || "Network error. Please try again.");
-        }
-    }
-
-    // ============================
-    // Delete
-    // ============================
-
-    /**
-     * Deletes the category with the given id after user confirmation.
-     */
-    async function deleteCategory(id) {
-
-        if (!confirm("Are you sure you want to delete this category?")) {
-            return;
+        function resetForm() {
+            els.id.value = "";
+            els.name.value = "";
+            els.name.disabled = true;
+            els.name.readOnly = false;
+            els.saveCategory.disabled = true;
+            els.cancelCategory.disabled = true;
+            showError("");
+            showMessage("");
         }
 
-        showError("");
-        showMessage("");
+        /* ------------------------------------------------------------------
+         * Server communication
+         * ------------------------------------------------------------------ */
 
-        const body = new FormData();
+        /**
+         * POSTs a FormData payload to the given URL and returns the parsed JSON
+         * on success. Throws an Error with a user-friendly message otherwise.
+         */
+        function post(url, body) {
 
-        try {
+            // Extra fields are ignored by [FromForm] model binders, so adding
+            // the token as a field here is harmless and makes the request work
+            // even when only the form-field style is enabled on the server.
+            body.append("__RequestVerificationToken", readToken());
 
-            const payload = await post(urls.delete(id), body);
+            return fetch(url, {
+                method: "POST",
+                headers: {
+                    "RequestVerificationToken": readToken()
+                },
+                body: body
+            }).then(function (response) {
 
-            showMessage(payload && payload.message ? payload.message : "Category deleted.");
+                return response.json().then(function (payload) {
+                    if (!response.ok) {
+                        var message =
+                            (payload && payload.message)
+                                ? payload.message
+                                : "Request failed.";
 
-            setTimeout(function () {
-                window.location.assign(urls.baseInfo);
-            }, 700);
+                        throw new Error(message);
+                    }
 
-        } catch (error) {
-            showError(error.message || "Could not delete the category.");
-        }
-    }
-
-    // ============================
-    // Events
-    // ============================
-
-    btnNewCategory.addEventListener("click", function () {
-
-        categoryId.value = "";
-        categoryName.value = "";
-
-        showError("");
-        showMessage("");
-
-        enableForm();
-
-    });
-
-    btnSaveCategory.addEventListener("click", saveCategory);
-
-    categoryName.addEventListener("keydown", function (event) {
-
-        if (event.key === "Enter") {
-            event.preventDefault();
-            saveCategory();
-        }
-
-    });
-
-    btnCancelCategory.addEventListener("click", resetCategoryForm);
-
-    document
-        .querySelectorAll(".btn-edit-category")
-        .forEach(function (button) {
-
-            button.addEventListener("click", function () {
-
-                // Load the category into the form so the next save performs
-                // an update instead of a create.
-                categoryId.value = this.dataset.id;
-                categoryName.value = this.dataset.name;
-
-                enableForm();
+                    return payload;
+                });
 
             });
+        }
 
+        /**
+         * After a successful save/delete we reload the page so the table is
+         * re-rendered from the server with the same markup as first load.
+         */
+        function reloadList() {
+            setTimeout(function () {
+                window.location.assign(endpoints.baseInfo);
+            }, 600);
+        }
+
+        /* ------------------------------------------------------------------
+         * Actions
+         * ------------------------------------------------------------------ */
+
+        function saveCategory() {
+
+            var id = els.id.value;
+            var name = els.name.value.trim();
+
+            if (name === "") {
+                showError("Please enter category name.");
+                els.name.focus();
+                return;
+            }
+
+            if (isBusy) {
+                return;
+            }
+
+            setBusy(true);
+            showError("");
+            showMessage("");
+
+            var body = new FormData();
+            body.append("Title", name);
+
+            var isEdit = id !== "";
+
+            if (isEdit) {
+                body.append("Id", id);
+            }
+
+            post(isEdit ? endpoints.update : endpoints.create, body)
+                .then(function (payload) {
+                    setBusy(false);
+                    showMessage(
+                        (payload && payload.message) ? payload.message : "Category saved."
+                    );
+                    reloadList();
+                })
+                .catch(function (error) {
+                    setBusy(false);
+                    showError(error.message || "Network error. Please try again.");
+                });
+        }
+
+        function startEdit(button) {
+            els.id.value = button.dataset.id;
+            els.name.value = button.dataset.name;
+            enableForm();
+        }
+
+        function deleteCategory(button) {
+            var id = button.dataset.id;
+
+            if (!confirm("Are you sure you want to delete this category?")) {
+                return;
+            }
+
+            showError("");
+            showMessage("");
+
+            post(endpoints.deleteById(id), new FormData())
+                .then(function (payload) {
+                    showMessage(
+                        (payload && payload.message) ? payload.message : "Category deleted."
+                    );
+                    reloadList();
+                })
+                .catch(function (error) {
+                    showError(error.message || "Could not delete the category.");
+                });
+        }
+
+        /* ------------------------------------------------------------------
+         * Wire up events
+         * ------------------------------------------------------------------ */
+
+        els.newCategory.addEventListener("click", function () {
+            els.id.value = "";
+            els.name.value = "";
+            showError("");
+            showMessage("");
+            enableForm();
         });
 
-    document
-        .querySelectorAll(".btn-delete-category")
-        .forEach(function (button) {
+        els.saveCategory.addEventListener("click", saveCategory);
 
-            button.addEventListener("click", function () {
+        els.name.addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                saveCategory();
+            }
+        });
 
-                deleteCategory(this.dataset.id);
+        els.cancelCategory.addEventListener("click", resetForm);
 
+        // Event delegation on the table body: works even if the rows are
+        // re-rendered after a save, and requires only one listener per action.
+        if (els.tableBody) {
+            els.tableBody.addEventListener("click", function (event) {
+                var button = event.target.closest
+                    ? event.target.closest("button")
+                    : null;
+
+                if (!button) {
+                    return;
+                }
+
+                if (button.classList.contains("btn-edit-category")) {
+                    startEdit(button);
+                } else if (button.classList.contains("btn-delete-category")) {
+                    deleteCategory(button);
+                }
             });
-
-        });
-
-}
+        }
+    }
+})();

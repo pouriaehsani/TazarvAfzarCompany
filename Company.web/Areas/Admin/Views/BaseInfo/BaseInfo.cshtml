@@ -1,4 +1,4 @@
-﻿@{
+@{
     Layout = "_Layout";
 }
 
@@ -205,5 +205,7 @@
 
     @* Antiforgery token is rendered above the Save button, next to #categoryId *@
 
-    <script src="~/js/BaseInfo/Categories.js"></script>
+    @* asp-append-version appends a content-hash to the URL so browsers never
+       serve a stale cached copy of this script after a deploy. *@
+    <script src="~/js/BaseInfo/Categories.js" asp-append-version="true"></script>
 }
