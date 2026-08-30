@@ -1,7 +1,8 @@
-﻿using Company.Application.DTOs.Category;
+using Company.Application.DTOs.Category;
 using Company.Application.Exceptions;
 using Company.Application.Interfaces;
 using Company.Domain.Entities;
+using FluentValidation;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,13 +15,16 @@ namespace Company.Application.Services
     {
         private readonly IGenericRepository<Category> _cat;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IValidator<CreateCategoryDto> _createCategoryValidator;
 
         public BaseInfo(
             IGenericRepository<Category> genericRepository,
-            IUnitOfWork unitOfWork)
+            IUnitOfWork unitOfWork,
+            IValidator<CreateCategoryDto> createCategoryValidator)
         {
             _cat = genericRepository;
             _unitOfWork = unitOfWork;
+            _createCategoryValidator = createCategoryValidator;
         }
 
         public async Task<List<Category>> GetAllAsync()
@@ -31,6 +35,16 @@ namespace Company.Application.Services
         public async Task CreateAsync(CreateCategoryDto dto)
         {
             var title = NormalizeTitle(dto.Title);
+
+            // Application-layer business rules: validate the normalized input.
+            var validationResult = await _createCategoryValidator.ValidateAsync(
+                new CreateCategoryDto { Title = title });
+
+            if (!validationResult.IsValid)
+            {
+                throw new Company.Application.Exceptions.ValidationException(
+                    validationResult.Errors);
+            }
 
             if (await TitleExistsAsync(title))
             {

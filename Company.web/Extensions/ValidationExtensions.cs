@@ -1,7 +1,7 @@
-﻿using FluentValidation.Results;
+using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 
-namespace Company.Application.Extensions;
+namespace Company.web.Extensions;
 
 public static class ValidationExtensions
 {

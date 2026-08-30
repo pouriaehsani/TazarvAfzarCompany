@@ -14,9 +14,9 @@ namespace Company.Application.Validators.Categories
         {
             RuleFor(x => x.Title)
                 .NotEmpty()
-                .WithMessage("نام دسته‌بندی الزامی است.")
+                .WithMessage("Category name is required.")
                 .MaximumLength(100)
-                .WithMessage("حداکثر طول نام دسته‌بندی ۱۰۰ کاراکتر است.");
+                .WithMessage("Category name cannot exceed 100 characters.");
         }
     }
 }
