@@ -178,7 +178,7 @@ namespace Company.Application.Services
         {
             if (!validationResult.IsValid)
             {
-                throw new ValidationException(validationResult.Errors);
+                throw new FluentValidation.ValidationException(validationResult.Errors);
             }
         }
 
